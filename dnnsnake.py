@@ -6,7 +6,6 @@ from collections import deque
 import torch
 import numpy as np
 from model import Linear_QNet, QTrainer
-from helper import plot
 from DQNcnn import DQN, DQN_Agent, ReplayMemory
 from enum import Enum
 import time
@@ -140,7 +139,11 @@ class Snake:
                     self.is_alive = False
                     reward = -50  # Negative reward for colliding with an enemy snake's body
                     return reward, self.is_alive, self.grow_to
-
+        # Check for collisions with own body
+        if new_head in list(self.body)[1:]:
+            self.is_alive = False
+            reward = -50  # Negative reward for colliding with own body
+            return reward, self.is_alive, self.grow_to
         # Check for food consumption
         if new_head in food_positions:
             self.grow_to += 1
@@ -296,6 +299,9 @@ def main():
             for i, snake in enumerate(snakes):
                 if score[i] > record[i]:
                     record[i] = score[i]
+                    # save the weights when new best score is reached
+                    torch.save(agents[i].policy_net.state_dict(), f'best_model_snake_{i}.pth')
+
                 total_score[i] += score[i]
                 window_scores[i].append(score[i])  # Append the score to the window scores list
                 
