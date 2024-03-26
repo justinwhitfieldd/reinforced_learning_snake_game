@@ -1,36 +1,25 @@
-
 import pygame
-import sys
 import random
 from collections import deque
 import torch
 import numpy as np
-from model import Linear_QNet, QTrainer
 from DQNcnn import DQN, DQN_Agent, ReplayMemory
-from enum import Enum
-import time
-# Initialize Pygame
-import pdb
-import math
 import random
 import matplotlib
 import matplotlib.pyplot as plt
 from collections import namedtuple, deque
-from itertools import count
 import logging
 import torch
-import torch.nn as nn
-import torch.optim as optim
-import torch.nn.functional as F
+import argparse
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 is_ipython = 'inline' in matplotlib.get_backend()
 if is_ipython:
     from IPython import display
     plt.ion()
+
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
-
 BOARD_SIZE = 11
 CELL_SIZE = 40
 GRID_COLOR = (200, 200, 200)
@@ -45,9 +34,6 @@ DIRECTIONS = {
     "LEFT": (-1, 0),
     "RIGHT": (1, 0),
 }
-# Set up the display
-screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
-pygame.display.set_caption('BattleSnake Game Board')
 
 # Global variable to track food locations
 food_positions = []
@@ -166,7 +152,7 @@ class Snake:
 
         return reward, self.is_alive, self.score
 
-    def draw(self):
+    def draw(self,screen):
         for index, segment in enumerate(self.body):
             x, y = segment
             # Check if this segment is the head
@@ -182,7 +168,7 @@ class Snake:
                 # Draw a smaller inner rectangle for visual differentiation
                 pygame.draw.rect(screen, (0, 200, 0), pygame.Rect(x * CELL_SIZE + 4, y * CELL_SIZE + 4, CELL_SIZE - 8, CELL_SIZE - 8))
 
-def update_grid():
+def update_grid(screen):
     for x in range(0, WINDOW_WIDTH, CELL_SIZE):
         for y in range(0, WINDOW_HEIGHT, CELL_SIZE):
             rect = pygame.Rect(x, y, CELL_SIZE, CELL_SIZE)
@@ -263,31 +249,39 @@ def get_matrix_state(snakes, snake_id):
     # Stack the game grid matrix, distance to food map, and distance to enemy snake map along a new axis
     stacked_state = np.stack((matrix_state, distance_to_food_map, distance_to_enemy_snake_map), axis=0)
     
-    
     # print("_____________________________")
     # for state in distance_to_enemy_snake_map:
     #     print(state)
     return stacked_state
-def main():
-    pygame.init()
+def main(args):
+    model_paths = args.model
+    display_on = args.displayOn
+    speed = args.speed
+    if display_on:
+        pygame.init()
+        # Set up the display
+        screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
+        pygame.display.set_caption('BattleSnake Game Board')
 
     plot_mean_scores, total_score, record, score, reward = [[], []], [0, 0], [0, 0], [0, 0], [0, 0]
     running = True
     games = 0
+    
     global snakes, agents  # Make sure these are accessible and modifiable
-    clock = pygame.time.Clock()
+    #clock = pygame.time.Clock()
     snakes = [Snake((5, 5),0), Snake((7, 7),1)]  # Example snakes
     agents = [DQN_Agent(n_actions=3, n_observations=11*11, input_channels=3) for _ in snakes]
     spawn_food(snakes,3)
+
     window_size = 300
     window_scores = [[] for _ in snakes]
+
     while running:
-        
         plot_scores = [[], []]
-        # Event handling
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
+        if display_on:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    running = False
         
         if len(food_positions) == 0:
             spawn_food(snakes,3)
@@ -349,15 +343,20 @@ def main():
                 for key in policy_net_state_dict:
                     target_net_state_dict[key] = policy_net_state_dict[key]*agents[i].TAU + target_net_state_dict[key]*(1-agents[i].TAU)
                 agents[i].target_net.load_state_dict(target_net_state_dict)
-
-        screen.fill(BACKGROUND_COLOR)
-
-        update_grid()
-        for snake in snakes:
-            if snake.is_alive:
-                snake.draw()
-        pygame.display.flip()
+        if display_on:
+            screen.fill(BACKGROUND_COLOR)
+            update_grid(screen)
+            for snake in snakes:
+                if snake.is_alive:
+                    snake.draw(screen)
+                pygame.display.flip()
     pygame.quit()
 
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser(description="BattleSnake Game with AI Agents")
+    parser.add_argument('--model', nargs='+', help='Path to the pre-trained model file(s). Accepts up to two model file paths/names.', default=[])
+    parser.add_argument('--displayOn', action='store_true', help='Enable game display.')
+    #currently does nothing but thought might be useful later for showing trained snake movement
+    parser.add_argument('--speed', type=int, default=1, help='Time between steps in milliseconds.')
+    args = parser.parse_args()
+    main(args)
